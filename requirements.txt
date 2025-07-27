@@ -1,0 +1,17 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.23.0
+pyarrow>=7.0.0
+
+# Web scraping
+selenium>=4.0.0
+
+# Dashboard
+streamlit>=1.47.0
+plotly>=6.2.0
+
+# Data processing
+openpyxl>=3.0.0
+
+# Utilities
+requests>=2.27.0

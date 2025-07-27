@@ -1,0 +1,42 @@
+{
+  "total_records": 13924,
+  "cities": [
+    "Chandigarh",
+    "Dehradun",
+    "Delhi",
+    "Lucknow",
+    "Mysuru"
+  ],
+  "years": [
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "data_quality": {
+    "available": 10638,
+    "missing": 3286
+  },
+  "missing_data_by_city": {
+    "Mysuru": [
+      2017,
+      2018
+    ],
+    "Dehradun": [
+      2017,
+      2018,
+      2019,
+      2020,
+      2021
+    ],
+    "Chandigarh": [
+      2017,
+      2018
+    ]
+  }
+}
