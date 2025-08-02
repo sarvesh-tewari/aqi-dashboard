@@ -169,6 +169,7 @@ def calculate_city_metrics(df):
             days_below_50 = len(year_data[year_data['aqi_value'] < 50])
             peak_aqi = year_data['aqi_value'].max()
             avg_aqi = year_data['aqi_value'].mean()
+            median_aqi = year_data['aqi_value'].median()
             total_days = len(year_data)
             
             metrics.append({
@@ -178,6 +179,7 @@ def calculate_city_metrics(df):
                 'days_below_50': days_below_50,
                 'peak_aqi': peak_aqi,
                 'avg_aqi': avg_aqi,
+                'median_aqi': median_aqi,
                 'total_days': total_days,
                 'percentage_above_100': (days_above_100 / total_days * 100) if total_days > 0 else 0,
                 'percentage_below_50': (days_below_50 / total_days * 100) if total_days > 0 else 0
@@ -226,6 +228,14 @@ def create_city_metrics_section(df):
             )
         
         with cols[2]:
+            avg_median = city_metrics['median_aqi'].mean()
+            st.metric(
+                "📊 Average Median AQI",
+                f"{avg_median:.0f}",
+                help=f"Average median AQI across all years for {city}"
+            )
+        
+        with cols[3]:
             total_above_100 = city_metrics['days_above_100'].sum()
             st.metric(
                 "⚠️ Days Above 100",
@@ -234,7 +244,10 @@ def create_city_metrics_section(df):
                 help=f"Days with AQI > 100 (unhealthy) for {city}"
             )
         
-        with cols[3]:
+        # Add a new row for additional metrics
+        cols2 = st.columns(4)
+        
+        with cols2[0]:
             total_below_50 = city_metrics['days_below_50'].sum()
             st.metric(
                 "✅ Days Below 50",
@@ -248,18 +261,19 @@ def create_city_metrics_section(df):
         
         # Create a table for year-wise metrics
         display_df = city_metrics[['year', 'total_days', 'days_above_100', 'days_below_50', 
-                                 'peak_aqi', 'avg_aqi', 'percentage_above_100', 'percentage_below_50']].copy()
+                                 'peak_aqi', 'avg_aqi', 'median_aqi', 'percentage_above_100', 'percentage_below_50']].copy()
         display_df = display_df.sort_values('year')
         
         # Format the display
         display_df['peak_aqi'] = display_df['peak_aqi'].round(0).astype(int)
         display_df['avg_aqi'] = display_df['avg_aqi'].round(1)
+        display_df['median_aqi'] = display_df['median_aqi'].round(1)
         display_df['percentage_above_100'] = display_df['percentage_above_100'].round(1)
         display_df['percentage_below_50'] = display_df['percentage_below_50'].round(1)
         
         # Rename columns for display
         display_df.columns = ['Year', 'Total Days', 'Days > 100', 'Days < 50', 
-                             'Peak AQI', 'Avg AQI', '% > 100', '% < 50']
+                             'Peak AQI', 'Avg AQI', 'Median AQI', '% > 100', '% < 50']
         
         st.dataframe(display_df, use_container_width=True)
         st.markdown("---")
@@ -355,6 +369,44 @@ def create_city_comparison_chart(df):
         )
         fig_bar.update_layout(height=400)
         st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Add median AQI comparison
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        # Bar chart for median AQI
+        median_aqi_by_city = available_data.groupby('city')['aqi_value'].agg(['median', 'count']).reset_index()
+        
+        fig_median = px.bar(
+            median_aqi_by_city,
+            x='city',
+            y='median',
+            title='Median AQI by City',
+            labels={'median': 'Median AQI', 'city': 'City'}
+        )
+        fig_median.update_layout(height=400)
+        st.plotly_chart(fig_median, use_container_width=True)
+    
+    with col4:
+        # Comparison chart: Average vs Median
+        comparison_data = available_data.groupby('city')['aqi_value'].agg(['mean', 'median']).reset_index()
+        comparison_data = comparison_data.melt(id_vars=['city'], 
+                                             value_vars=['mean', 'median'],
+                                             var_name='metric', 
+                                             value_name='aqi_value')
+        comparison_data['metric'] = comparison_data['metric'].map({'mean': 'Average', 'median': 'Median'})
+        
+        fig_comparison = px.bar(
+            comparison_data,
+            x='city',
+            y='aqi_value',
+            color='metric',
+            title='Average vs Median AQI by City',
+            labels={'aqi_value': 'AQI Value', 'city': 'City', 'metric': 'Metric'},
+            barmode='group'
+        )
+        fig_comparison.update_layout(height=400)
+        st.plotly_chart(fig_comparison, use_container_width=True)
 
 def create_monthly_analysis(df):
     """Create monthly analysis chart"""
@@ -389,8 +441,16 @@ def create_monthly_analysis(df):
     else:
         heatmap_data = available_data[available_data['year'] == selected_heatmap_year]
     
-    # Create monthly heatmap
+    # Create monthly heatmap for average AQI
     monthly_data = heatmap_data.groupby(['city', 'month'])['aqi_value'].mean().reset_index()
+    monthly_data['metric'] = 'Average'
+    
+    # Create monthly heatmap for median AQI
+    monthly_median_data = heatmap_data.groupby(['city', 'month'])['aqi_value'].median().reset_index()
+    monthly_median_data['metric'] = 'Median'
+    
+    # Combine average and median data
+    monthly_data = pd.concat([monthly_data, monthly_median_data], ignore_index=True)
     
     # Map numeric months to month names
     month_names = {
@@ -406,8 +466,19 @@ def create_monthly_analysis(df):
     month_order = ['January', 'February', 'March', 'April', 'May', 'June',
                    'July', 'August', 'September', 'October', 'November', 'December']
     
+    # Add metric selector for heatmap
+    metric_selector = st.selectbox(
+        "📊 Select Metric for Heatmap",
+        ['Average', 'Median'],
+        key="metric_selector",
+        help="Choose between Average or Median AQI for the heatmap"
+    )
+    
+    # Filter data based on metric selection
+    metric_data = monthly_data[monthly_data['metric'] == metric_selector]
+    
     # Get all cities
-    all_cities = monthly_data['city'].unique()
+    all_cities = metric_data['city'].unique()
     
     # Create a complete matrix for heatmap
     heatmap_matrix = []
@@ -419,9 +490,9 @@ def create_monthly_analysis(df):
         
         for month_name in month_order:
             # Find data for this city and month
-            month_data = monthly_data[
-                (monthly_data['city'] == city) & 
-                (monthly_data['month_name'] == month_name)
+            month_data = metric_data[
+                (metric_data['city'] == city) & 
+                (metric_data['month_name'] == month_name)
             ]
             
             if not month_data.empty:
@@ -451,7 +522,7 @@ def create_monthly_analysis(df):
     ))
     
     fig.update_layout(
-        title=f'Monthly Average AQI Heatmap - {selected_heatmap_year}',
+        title=f'Monthly {metric_selector} AQI Heatmap - {selected_heatmap_year}',
         xaxis_title="Month",
         yaxis_title="City",
         height=400,
@@ -483,6 +554,24 @@ def create_summary_stats(df):
     # Flatten column names
     summary_stats.columns = ['Count', 'Mean', 'Std', 'Min', 'Max', 'Median']
     summary_stats = summary_stats.reset_index()
+    
+    # Add a comparison section for Average vs Median
+    st.markdown("### 📊 Average vs Median AQI Comparison")
+    
+    # Calculate overall averages and medians by city
+    city_comparison = available_data.groupby('city')['aqi_value'].agg(['mean', 'median']).round(1).reset_index()
+    city_comparison.columns = ['City', 'Average AQI', 'Median AQI']
+    city_comparison['Difference'] = city_comparison['Average AQI'] - city_comparison['Median AQI']
+    
+    st.dataframe(city_comparison, use_container_width=True)
+    
+    # Add explanation
+    st.markdown("""
+    **Note**: The difference between Average and Median AQI indicates the skewness of the data:
+    - **Positive difference**: Data is right-skewed (more high AQI days)
+    - **Negative difference**: Data is left-skewed (more low AQI days)
+    - **Small difference**: Data is more symmetric
+    """)
     
     # Sort by city and year
     summary_stats = summary_stats.sort_values(['city', 'year'])
